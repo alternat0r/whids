@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	"github.com/0xrawsec/golang-utils/fsutil"
 	"github.com/0xrawsec/whids/utils"
@@ -15,9 +16,12 @@ import (
 const ()
 
 var (
-	guidRe      = regexp.MustCompile(`(?i:\{[a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12}\})`)
-	eventHashRe = regexp.MustCompile(`(?i:[a-f0-9]{32,})`) // at least md5
-	filenameRe  = regexp.MustCompile(`[\w\s\.-]+`)
+	// Anchored regular expressions: the entire field must match, so none of
+	// them can carry a path separator (and therefore no path traversal) into
+	// the components used to build the dump destination path.
+	guidRe      = regexp.MustCompile(`(?i:\A\{[a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12}\}\z)`)
+	eventHashRe = regexp.MustCompile(`(?i:\A[a-f0-9]{32,}\z)`) // at least md5
+	filenameRe  = regexp.MustCompile(`\A[\w\s\.-]+\z`)
 
 	UploadShrinkerBufferSize = int64(3 * utils.Mega)
 )
@@ -131,7 +135,23 @@ func (f *FileUpload) Validate() error {
 	if !eventHashRe.MatchString(f.EventHash) {
 		return fmt.Errorf("bad event hash")
 	}
+	// The regexes above are anchored so they cannot contain separators, but we
+	// reject path separators outright as defense in depth: the components are
+	// joined into a filesystem path, so any of them carrying a separator (or
+	// the ".." component) could escape the dump directory.
+	if hasPathComponent(f.Name) || hasPathComponent(f.GUID) || hasPathComponent(f.EventHash) {
+		return fmt.Errorf("invalid path component")
+	}
 	return nil
+}
+
+// hasPathComponent reports whether s contains a path separator or a ".."
+// component, i.e. anything that could be used to traverse out of a directory.
+func hasPathComponent(s string) bool {
+	if strings.ContainsAny(s, `/\`) {
+		return true
+	}
+	return strings.Contains(s, "..")
 }
 
 // Implode returns the full path of the FileUpload
@@ -146,6 +166,17 @@ func (f *FileUpload) Dump(root string) (err error) {
 		return
 	}
 
+	// Defense in depth: make sure the computed destination stays inside root,
+	// no matter what the components are (e.g. ".." or absolute paths).
+	rootAbs, err := filepath.Abs(root)
+	if err != nil {
+		return
+	}
+	destDir := filepath.Join(rootAbs, f.GUID, f.EventHash)
+	if !isSubPath(rootAbs, destDir) {
+		return fmt.Errorf("dump destination escapes root directory")
+	}
+
 	dirpath := filepath.Join(root, f.GUID, f.EventHash)
 
 	// Create directory if doesn't exist
@@ -156,6 +187,16 @@ func (f *FileUpload) Dump(root string) (err error) {
 	}
 
 	return f.write(root)
+}
+
+// isSubPath reports whether sub is p itself or located inside p.
+func isSubPath(p, sub string) bool {
+	rel, err := filepath.Rel(p, sub)
+	if err != nil {
+		return false
+	}
+	// rel is always a relative path; reject escaping via "..".
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)))
 }
 
 func (f *FileUpload) write(root string) (err error) {
