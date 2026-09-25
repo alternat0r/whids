@@ -476,7 +476,6 @@ func (m *Manager) eptAPISystemInfo(wt http.ResponseWriter, rq *http.Request) {
 				http.Error(wt, "failed to unmarshal data", http.StatusInternalServerError)
 			} else {
 				endpt.SystemInfo = &info
-				m.db.InsertOrUpdate(endpt)
 				if err := m.db.InsertOrUpdate(endpt); err != nil {
 					m.logAPIErrorf("failed to update endpoint data: %s", err)
 				}
