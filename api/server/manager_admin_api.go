@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -132,7 +133,23 @@ func admJSONResp(data interface{}) []byte {
 /////////////////// Manager functions
 
 var (
-	upgrader = websocket.Upgrader{} // use default options
+	// upgrader is used to upgrade admin API streaming connections to
+	// websocket. CheckOrigin rejects cross-origin browser connections: the
+	// Origin must match the request host or be absent (non-browser clients).
+	// The endpoint is still protected by adminAuthorizationMiddleware.
+	upgrader = websocket.Upgrader{
+		CheckOrigin: func(rq *http.Request) bool {
+			origin := rq.Header.Get("Origin")
+			if origin == "" {
+				return true
+			}
+			ou, err := url.Parse(origin)
+			if err != nil {
+				return false
+			}
+			return ou.Host == rq.Host
+		},
+	}
 )
 
 func (m *Manager) adminAuthorizationMiddleware(next http.Handler) http.Handler {
@@ -163,7 +180,11 @@ func (m *Manager) admLogHTTPMiddleware(next http.Handler) http.Handler {
 func (m *Manager) adminRespHeaderMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(wt http.ResponseWriter, rq *http.Request) {
 
-		wt.Header().Set("Access-Control-Allow-Origin", "*")
+		// We do not set Access-Control-Allow-Origin: the admin API is
+		// authenticated with a static key (X-Api-Key) sent via a custom
+		// header, which browsers cannot use cross-origin without a
+		// preflight that we do not answer. A wildcard would only invite
+		// misuse if cookie/bearer auth were ever added.
 		wt.Header().Set("Content-Type", "application/json")
 
 		next.ServeHTTP(wt, rq)
@@ -707,16 +728,21 @@ func (m *Manager) admAPIEndpointLogs(wt http.ResponseWriter, rq *http.Request) {
 			wt.Write(admErr(format("Failed to parse skip parameter: %s", err)))
 			return
 		}
+		if skip < 0 {
+			wt.Write(admErr("skip parameter must be greater or equal to 0"))
+			return
+		}
 	}
 
 	if pLimit != "" {
 		// we don't raise error here on bad conversion
 		if l, err := strconv.Atoi(pLimit); err == nil {
-			if l <= MaxLimitLogAPI {
+			if l > 0 && l <= MaxLimitLogAPI {
 				limit = l
-			} else {
+			} else if l > MaxLimitLogAPI {
 				limit = MaxLimitLogAPI
 			}
+			// non-positive or malformed values keep the default limit
 		}
 	}
 
@@ -1522,7 +1548,7 @@ func (m *Manager) wsHandleControlMessage(c *websocket.Conn) {
 }
 
 func (m *Manager) admAPIStreamEvents(w http.ResponseWriter, r *http.Request) {
-	c, err := upgrader.Upgrade(w, r, nil)
+	c, err := upgrader.Upgrade(w, r, r.Header)
 	if err != nil {
 		m.logAPIErrorf("failed to upgrade to websocket: %s", err)
 		return
@@ -1545,7 +1571,7 @@ func (m *Manager) admAPIStreamEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Manager) admAPIStreamDetections(w http.ResponseWriter, r *http.Request) {
-	c, err := upgrader.Upgrade(w, r, nil)
+	c, err := upgrader.Upgrade(w, r, r.Header)
 	if err != nil {
 		m.logAPIErrorf("failed to upgrade to websocket: %s", err)
 		return
