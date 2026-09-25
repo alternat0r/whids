@@ -1,5 +1,18 @@
 # Archive of the old changelog
 
+## v1.6.1
+- **Security release**
+- **Manager**
+  - Fixed path traversal in file upload dumps which allowed an authenticated endpoint to write arbitrary files on the manager host (arbitrary file write)
+  - `GET /users` no longer returns admin API keys unless explicitly requested with `?showkey`
+  - Request body size is now limited on both APIs and the gzip decompression is capped (DoS hardening)
+  - TLS is now required to run the APIs, plain HTTP is only allowed with an explicit `insecure-http` option and raises a security warning; the skeleton manager configuration now includes a TLS section
+  - Admin API: removed the `Access-Control-Allow-Origin: *` header and the websocket streams now check the request origin
+  - Log query parameters (`skip`, `limit`) are now validated
+- **Agent**
+  - Randomly generated identifiers (commands, drop files) and canary file contents now use a cryptographic random generator
+  - Canary directories are created with restrictive permissions (0700 instead of 0777)
+
 ## v1.6
 - **WHIDS** is installed as a true **Windows service**
 - Reworked the installation script to allow several options
