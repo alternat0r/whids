@@ -121,6 +121,15 @@ func (l *limitedReadCloser) Close() error {
 	return l.closer.Close()
 }
 
+// logPlaintextWarning logs a prominent warning when an API is about to serve
+// plain HTTP, which transmits the static API keys in the clear.
+func (m *Manager) logPlaintextWarning(which, uri string) {
+	if !m.Config.TLS.Empty() {
+		return
+	}
+	m.Logger.Warnf("SECURITY WARNING: the %s is serving plain HTTP on %s. API keys are transmitted unencrypted. Configure the [tls] section (cert/key) to enable TLS.", which, uri)
+}
+
 //////////////////// TLSConfig
 
 // TLSConfig structure definition
@@ -167,6 +176,7 @@ type ManagerConfig struct {
 	Database    string            `toml:"db" comment:"Path to store database"`
 	Repair      bool              `toml:"repair-db" comment:"Attempt to repair broken database"`
 	DumpDir     string            `toml:"dump-dir" comment:"Directory where to dump artifacts collected on hosts"`
+	Insecure    bool              `toml:"insecure-http" comment:"Allow the APIs to run over plain HTTP. Leave unset to require TLS. Enabling this exposes static API keys on the wire and should only be used for local/development use."`
 	AdminAPI    AdminAPIConfig    `toml:"admin-api" comment:"Settings to configure administrative API (not supposed to be reachable by endpoints)"`
 	EndpointAPI EndpointAPIConfig `toml:"endpoint-api" comment:"Settings to configure API used by endpoints"`
 	Logging     ManagerLogConfig  `toml:"logging" comment:"Logging settings"`
@@ -294,6 +304,12 @@ func NewManager(c *ManagerConfig) (*Manager, error) {
 	m.stop = make(chan bool)
 	if err = c.TLS.Verify(); err != nil && !c.TLS.Empty() {
 		return nil, err
+	}
+
+	// Secure by default: refuse to serve plain HTTP (which would transmit
+	// static API keys in the clear) unless the operator explicitly opts in.
+	if c.TLS.Empty() && !c.Insecure {
+		return nil, fmt.Errorf("TLS is not configured; set the [tls] section (cert/key) to enable it, or explicitly set insecure-http = true to run plain HTTP (not recommended)")
 	}
 
 	// Gene components initialization

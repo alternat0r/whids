@@ -169,6 +169,7 @@ func (m *Manager) runEndpointAPI() {
 
 		if m.Config.TLS.Empty() {
 			// Bind to a port and pass our router in
+			m.logPlaintextWarning("endpoint API", uri)
 			m.Logger.Infof("Running endpoint HTTP API server on: %s", uri)
 			if err := m.endpointAPI.ListenAndServe(); err != http.ErrServerClosed {
 				m.Logger.Abort(1, err)

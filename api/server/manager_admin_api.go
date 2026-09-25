@@ -1629,6 +1629,7 @@ func (m *Manager) runAdminAPI() {
 
 		if m.Config.TLS.Empty() {
 			// Bind to a port and pass our router in
+			m.logPlaintextWarning("admin API", uri)
 			m.Logger.Infof("Running admin HTTP API server on: %s", uri)
 			if err := m.adminAPI.ListenAndServe(); err != http.ErrServerClosed {
 				m.Logger.Abort(1, err)

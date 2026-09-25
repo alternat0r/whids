@@ -46,6 +46,12 @@ var (
 		},
 		DumpDir:  "./data/dumps",
 		Database: "./data/database",
+		// TLS is required to serve the APIs (insecure-http is opt-in). Point
+		// this at a generated/self-signed pair, e.g. via: whids-man -certgen
+		TLS: server.TLSConfig{
+			Cert: "./cert.pem",
+			Key:  "./key.pem",
+		},
 	}
 )
 
