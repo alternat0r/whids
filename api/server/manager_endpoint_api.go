@@ -124,6 +124,8 @@ func (m *Manager) runEndpointAPI() {
 
 		rt := mux.NewRouter()
 		// Middleware initialization
+		// Bounds request body size (outermost, so it applies to the compressed body)
+		rt.Use(bodyLimitMiddleware)
 		// Manages Request Logging
 		if m.Config.Logging.VerboseHTTP {
 			rt.Use(m.endptLogHTTPMiddleware)

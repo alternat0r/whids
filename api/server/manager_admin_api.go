@@ -1582,6 +1582,8 @@ func (m *Manager) runAdminAPI() {
 
 		rt := mux.NewRouter()
 		// Middleware initialization
+		// Bounds request body size (outermost, so it applies to the compressed body)
+		rt.Use(bodyLimitMiddleware)
 		// Manages Request Logging
 		rt.Use(m.admLogHTTPMiddleware)
 		// Manages Authorization

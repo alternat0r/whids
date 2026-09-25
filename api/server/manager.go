@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"math/big"
 	"math/rand"
@@ -46,6 +47,12 @@ const (
 
 var (
 	noBracketGuidRe = regexp.MustCompile(`(?i:[a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12})`)
+
+	// Bounds on request payload sizes to prevent unbounded memory/disk
+	// consumption on the manager. Legit traffic (dump chunks are 3MB, tool
+	// binaries are ~10MB) stays far below these.
+	maxRequestBodyBytes  = int64(100 * utils.Mega)
+	maxDecompressedBytes = int64(100 * utils.Mega)
 )
 
 func init() {
@@ -74,6 +81,15 @@ func IPFromRequest(req *http.Request) (net.IP, error) {
 	return userIP, nil
 }
 
+// bodyLimitMiddleware wraps every request body with http.MaxBytesReader so a
+// client cannot stream an unbounded body into the manager (memory/DoS).
+func bodyLimitMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (m *Manager) gunzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Content-Encoding") == "gzip" {
@@ -83,9 +99,26 @@ func (m *Manager) gunzipMiddleware(next http.Handler) http.Handler {
 				m.Logger.Errorf("Failed to create reader to uncompress request: %s", err)
 				return
 			}
+			// Cap the decompressed stream so a highly compressed (zip-bomb)
+			// payload cannot expand into unbounded memory.
+			r.Body = &limitedReadCloser{Reader: io.LimitReader(r.Body, maxDecompressedBytes), closer: r.Body}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// limitedReadCloser pairs a size-limited reader with the underlying close.
+type limitedReadCloser struct {
+	Reader io.Reader
+	closer io.Closer
+}
+
+func (l *limitedReadCloser) Read(p []byte) (int, error) {
+	return l.Reader.Read(p)
+}
+
+func (l *limitedReadCloser) Close() error {
+	return l.closer.Close()
 }
 
 //////////////////// TLSConfig
