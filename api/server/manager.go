@@ -4,16 +4,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
-	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"math"
-	"math/big"
-	"math/rand"
 	"net"
 	"net/http"
 	"os"
@@ -54,15 +50,6 @@ var (
 	maxRequestBodyBytes  = int64(100 * utils.Mega)
 	maxDecompressedBytes = int64(100 * utils.Mega)
 )
-
-func init() {
-	// tries to initialize the math random generator with random seed
-	i, err := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
-	if err != nil {
-		panic(err)
-	}
-	rand.Seed(i.Int64())
-}
 
 ///////////////////// Utils
 

@@ -4,13 +4,13 @@
 package config
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/0xrawsec/gene/v2/engine"
 	"github.com/0xrawsec/golang-utils/datastructs"
@@ -30,7 +30,7 @@ func (c *Canary) create() (err error) {
 	for _, dir := range c.expandDir() {
 		// we create directory only if it is not existing
 		if !fsutil.Exists(dir) {
-			if err := os.MkdirAll(dir, 0777); err != nil {
+			if err := os.MkdirAll(dir, 0700); err != nil {
 				return err
 			}
 			if c.HideDirectories {
@@ -51,9 +51,12 @@ func (c *Canary) create() (err error) {
 				return err
 			}
 			defer fd.Close()
-			rand.Seed(time.Now().Unix())
 			buf := [1024]byte{}
-			size := rand.Int() % 50 * utils.Mega
+			// canary file size in [0;50) MiB of cryptographically random data
+			var size int
+			if n, err2 := rand.Int(rand.Reader, big.NewInt(50)); err2 == nil {
+				size = int(n.Int64() * int64(utils.Mega))
+			}
 			written, n := 0, 0
 			for written < size && err == nil {
 				if _, err = rand.Read(buf[:]); err != nil {

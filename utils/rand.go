@@ -2,7 +2,7 @@ package utils
 
 import (
 	"crypto/rand"
-	mrand "math/rand"
+	"fmt"
 
 	"github.com/google/uuid"
 )
@@ -15,13 +15,17 @@ func randByte() (byte, error) {
 	return b[0], nil
 }
 
-// UnsafeUUID generates a random UUID
+// UnsafeUUID generates a random UUID.
+//
+// Despite the historical name, it is now backed by crypto/rand
+// (uuid.NewRandom) rather than math/rand, which made command and drop-file
+// identifiers predictable. The name is kept only for backward compatibility.
 func UnsafeUUID() uuid.UUID {
-	uuid := uuid.UUID{}
-	for i := 0; i < len(uuid); i++ {
-		uuid[i] = uint8(mrand.Uint32() >> 24)
+	u, err := uuid.NewRandom()
+	if err != nil {
+		panic(fmt.Errorf("UnsafeUUID: failed to generate random uuid: %w", err))
 	}
-	return uuid
+	return u
 }
 
 func UUIDOrPanic() (u uuid.UUID) {
