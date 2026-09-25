@@ -174,6 +174,7 @@ func (m *Manager) admAPIUsers(wt http.ResponseWriter, rq *http.Request) {
 	var err error
 
 	identifier := rq.URL.Query().Get(api.QpIdentifier)
+	showKey, _ := strconv.ParseBool(rq.URL.Query().Get(api.QpShowKey))
 
 	switch rq.Method {
 	case "GET":
@@ -181,7 +182,18 @@ func (m *Manager) admAPIUsers(wt http.ResponseWriter, rq *http.Request) {
 			wt.Write(admErr(err))
 			return
 		} else {
-			wt.Write(admJSONResp(users))
+			out := make([]*AdminAPIUser, 0, len(users))
+			for _, o := range users {
+				user := o.(*AdminAPIUser)
+				// never expose admin API keys unless explicitly requested
+				if !showKey {
+					// copy so we don't mutate the cached database object
+					user = user.Copy()
+					user.Key = ""
+				}
+				out = append(out, user)
+			}
+			wt.Write(admJSONResp(out))
 		}
 	case "PUT":
 		var uuid, key string

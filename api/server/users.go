@@ -13,3 +13,9 @@ type AdminAPIUser struct {
 	Group       string `json:"group" sod:"index"`
 	Description string `json:"description"`
 }
+
+// Copy returns a pointer to a new copy of the AdminAPIUser
+func (u *AdminAPIUser) Copy() *AdminAPIUser {
+	new := *u
+	return &new
+}

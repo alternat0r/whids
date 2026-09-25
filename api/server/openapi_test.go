@@ -323,7 +323,10 @@ func TestOpenApiUserManagement(t *testing.T) {
 			openapi.Operation{
 				Method:  "GET",
 				Summary: "List all users",
-				Output:  AdminAPIResponse{},
+				Parameters: []*openapi.Parameter{
+					openapi.QueryParameter(api.QpShowKey, true, "Show or not key"),
+				},
+				Output: AdminAPIResponse{},
 			},
 		)
 

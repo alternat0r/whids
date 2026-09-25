@@ -5223,6 +5223,18 @@ var OpenAPIDefinition = `
           "Admin API User's Management"
         ],
         "summary": "List all users",
+        "parameters": [
+          {
+            "name": "showkey",
+            "in": "query",
+            "description": "Show or not key",
+            "required": false,
+            "allowEmptyValue": true,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "HTTP 200 response",
