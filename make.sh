@@ -11,12 +11,16 @@ function check_err() {
     fi
 }
 
+echo "[1/4] Building Sysmon (download and configuration)"
 pushd $TOOLS/sysmon && make -j 8 $@ || check_err && popd
 
+echo "[2/4] Building WHIDS agent"
 pushd $TOOLS/whids && make -j 8 $@ || check_err && popd
 
+echo "[3/4] Building WHIDS manager"
 pushd $TOOLS/manager && make -j 8 $@ || check_err && popd
 
+echo "[4/4] Packaging release bundle (whids-${VERSION}-release-bundle.zip)"
 pushd ${RELEASE}
 # Remove previous bundles
 rm *.zip
