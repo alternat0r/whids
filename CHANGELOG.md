@@ -9,9 +9,14 @@
   - TLS is now required to run the APIs, plain HTTP is only allowed with an explicit `insecure-http` option and raises a security warning; the skeleton manager configuration now includes a TLS section
   - Admin API: removed the `Access-Control-Allow-Origin: *` header and the websocket streams now check the request origin
   - Log query parameters (`skip`, `limit`) are now validated
+  - New `GET /endpoints/commands/help` endpoint serving the list of the builtin EDR commands available on endpoints
 - **Agent**
   - Randomly generated identifiers (commands, drop files) and canary file contents now use a cryptographic random generator
   - Canary directories are created with restrictive permissions (0700 instead of 0777)
+- **Installation**
+  - The installer no longer fails with "The specified service already exists" (SC error 1073) when a previous Whids service is left behind; the existing service is removed before the new one is created
+- **Documentation**
+  - Fixed the broken link to the optimized Sysmon configuration files (now pointing to `utilities/sysmon`)
 
 ## v1.6
 - **WHIDS** is installed as a true **Windows service**
