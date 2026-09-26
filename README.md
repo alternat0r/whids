@@ -153,7 +153,7 @@ Please visit [doc/configuration.md](doc/configuration.md)
 
 # Changelog
 
-## v1.7
+## v1.7.1
 - New Administrative HTTP API with following features:
     - Manage endpoints (list, create, delete)
     - Get basic statistics about the manager
