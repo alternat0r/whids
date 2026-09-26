@@ -126,6 +126,7 @@ Please visit [doc/configuration.md](doc/configuration.md)
 # Known Issues
 
 * ~~~Does not work properly when ran from a network share **mapped as a network drive** (this case prevent whids to identify itself and thus generate some noise). Example: if `\\vbox\test` is mounted as `Z:` drive, running `Z:\whids.exe` **won't work** while running `\\vbox\test\whids.exe` actually would.~~ — **Fixed in v1.6.1**: the agent now resolves its own executable to the canonical UNC path (via `WNetGetConnection`) and matches it case-insensitively, so launching it from a mapped network drive works the same way as launching it by its UNC path.
+* **Recommendation:** regardless of the above, run the agent only from its designated installation folder (default `%ProgramFiles%\Whids`). Launching it from other drives or arbitrary locations — including mapped network drives — is not recommended; the installation folder is the supported, tested deployment path.
 
 # Roadmap until next release
 
