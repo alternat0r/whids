@@ -1,6 +1,6 @@
 # Archive of the old changelog
 
-## v1.6.1
+## v1.7
 - **Security release**
 - **Manager**
   - Fixed path traversal in file upload dumps which allowed an authenticated endpoint to write arbitrary files on the manager host (arbitrary file write)

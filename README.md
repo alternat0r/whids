@@ -178,6 +178,12 @@ Please visit [doc/configuration.md](doc/configuration.md)
 - Log filtering capabilities, allowing one to collect contextual events. Log filtering is achieved by creating Gene filtering rules (c.f. [Gene Documentation](https://github.com/0xrawsec/gene)).
 - Configuration files in TOML format for better readability
 - Better protection of the installation directory
+- Security release — fixes and hardening:
+    - **Manager**: fixed path traversal in file upload dumps (arbitrary file write); `GET /users` no longer returns admin API keys unless `?showkey` is requested; request body size and gzip decompression are limited; TLS is required to run the APIs (plain HTTP only with an explicit `insecure-http` option); removed the admin API CORS wildcard and the websocket streams now check the request origin; log query parameters (`skip`, `limit`) are validated; new `GET /endpoints/commands/help` endpoint; the endpoint command timeout is clamped to a sane range
+    - **Agent**: random identifiers and canary file contents now use a cryptographic random generator; canary directories are created with restrictive permissions (0700); the agent now identifies itself correctly when launched from a network share mapped as a drive letter
+    - **Installation**: the installer no longer fails with "The specified service already exists" (SC error 1073) when a previous Whids service is left behind
+    - **Build**: `make.sh` prints a progress message before each build step
+    - **Documentation**: fixed the broken link to the optimized Sysmon configuration files
 
 # Related Work
 
