@@ -156,7 +156,17 @@ EXIT /B 0
 :CreateWhidsSvc
 echo.
 echo [+] Creating WHIDS service
+sc.exe query %SVC% >nul 2>&1
+if %ERRORLEVEL% EQU 0 (
+    echo [!] WHIDS service already exists, removing it before installation
+    call :StopSvcs
+    sc.exe delete %SVC% >nul 2>&1
+)
 sc.exe create %SVC% binPath= "%BINPATH%" start= auto
+if not %ERRORLEVEL% EQU 0 (
+    echo [-] Failed to create the WHIDS service, see error above
+    EXIT /B 1
+)
 sc.exe description %SVC% "Windows Host IDS (v%VERSION%)"
 sc.exe failure whids reset= 0 actions= restart/0
 
