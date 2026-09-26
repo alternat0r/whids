@@ -1,3 +1,10 @@
+> ## ⚠️ MAINTAINER NOTICE
+>
+> **This project seem to be no longer maintain and consider abandoned by the
+> original creator. So I decide to make major patches according to user
+> feedbacks, issues and my own finding. Original project is critically
+> vulnerable to remote code execution and no more fixes has been offered.**
+
 **IMPORTANT:** this README and other documentation is not updated to reflect the changes made to latest beta releases (as a lot of changes happened). All this will be updated in time when a stable version will be released (see [Roadmap until next release](#roadmap-until-next-release)). Feel free to run beta releases on your own and ask questions if you need help.
 
 <p align="center">
