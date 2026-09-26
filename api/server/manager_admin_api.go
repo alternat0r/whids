@@ -32,11 +32,16 @@ import (
 
 const (
 	MaxLimitLogAPI = 10000
-)
 
-var (
-	// Used to specify a command timeout for command execution
+	// CommandTimeout is the default timeout for command execution
 	CommandTimeout = 15 * time.Second
+	// MinCommandTimeout is the minimum allowed command timeout. Zero or
+	// negative values would disable the timeout on the agent (unbounded run).
+	MinCommandTimeout = time.Second
+	// MaxCommandTimeout is the maximum allowed command timeout. The agent
+	// command runner is single-threaded, so an excessive timeout could hang
+	// it (and block further commands) for an unreasonable amount of time.
+	MaxCommandTimeout = 10 * time.Minute
 )
 
 func admApiParseDuration(pLast string) (d time.Duration, err error) {
