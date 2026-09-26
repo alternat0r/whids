@@ -81,6 +81,8 @@ const (
 	AdmAPICommandSuffix            = "/command"
 	AdmAPIEndpointCommandPath      = AdmAPIEndpointsByIDPath + AdmAPICommandSuffix
 	AdmAPIEndpointCommandFieldPath = AdmAPIEndpointCommandPath + "/{field}"
+	// Help about the EDR commands available on endpoints
+	AdmAPIEndpointCommandsHelp = AdmAPIEndpointsPath + "/commands/help"
 	// Logs related
 	AdmAPILogsSuffix             = "/logs"
 	AdmAPIEndpointLogsPath       = AdmAPIEndpointsByIDPath + AdmAPILogsSuffix

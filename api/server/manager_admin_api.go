@@ -1328,6 +1328,40 @@ func (m *Manager) admAPIStats(wt http.ResponseWriter, rq *http.Request) {
 	}
 }
 
+// EDRCommandHelp describes a command an endpoint can run
+type EDRCommandHelp struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Help        string `json:"help"`
+	Example     string `json:"example,omitempty"`
+}
+
+// EDRCommandsHelp is the list of the builtin EDR commands available on
+// endpoints (in addition, any binary present on the endpoint can be run)
+var EDRCommandsHelp = []EDRCommandHelp{
+	{Name: "contain", Description: "Isolate host at network level", Help: "contain"},
+	{Name: "uncontain", Description: "Uncontain host (i.e. remove network isolation)", Help: "uncontain"},
+	{Name: "osquery", Description: "Alias to `osqueryi --json -A`", Help: "osquery OSQUERY_TABLE", Example: "osquery processes"},
+	{Name: "sysmon", Description: "Alias to the sysmon binary deployed by the EDR. See sysmon binary command line switches for all available options.", Help: "sysmon [OPTIONS]", Example: "sysmon -h"},
+	{Name: "terminate", Description: "Terminate a process given its PID", Help: "terminate PID", Example: "terminate 1337"},
+	{Name: "hash", Description: "Hash a file", Help: "hash FILE", Example: "C:\\\\Windows\\\\System32\\\\cmd.exe"},
+	{Name: "rexhash", Description: "Recursively find files matching pattern and hash them", Help: "rexhash DIRECTORY PATTERN", Example: "C:\\\\Windows\\\\System32 cmd\\\\.exe"},
+	{Name: "stat", Description: "Stat a file or a directory", Help: "stat FILE|DIRECTORY", Example: "C:\\\\Windows\\\\System32\\\\cmd.exe"},
+	{Name: "ls", Description: "List a directory", Help: "ls DIRECTORY", Example: "C:\\\\Windows\\\\"},
+	{Name: "walk", Description: "Recursively list a directory", Help: "walk DIRECTORY", Example: "C:\\\\Windows\\\\System32"},
+	{Name: "find", Description: "Recursively find a pattern in filenames", Help: "find DIRECTORY REGEX_PATTERN", Example: "C:\\\\Windows\\\\System32 cmd.*\\\\.exe"},
+	{Name: "report", Description: "Generate a full IR ready report", Help: "report"},
+	{Name: "processes", Description: "Retrieve the full list of processes running (monitored from Sysmon logs)", Help: "processes"},
+	{Name: "modules", Description: "Retrieve the full list of modules ever loaded since boot (monitored from Sysmon logs)", Help: "modules"},
+	{Name: "drivers", Description: "Retrieve the full list of drivers ever loaded since boot (monitored from Sysmon logs)", Help: "drivers"},
+}
+
+// admAPIEndpointCommandsHelp serves the list of the builtin EDR commands
+// endpoints can run
+func (m *Manager) admAPIEndpointCommandsHelp(wt http.ResponseWriter, rq *http.Request) {
+	wt.Write(admJSONResp(EDRCommandsHelp))
+}
+
 func (m *Manager) admAPIIocs(wt http.ResponseWriter, rq *http.Request) {
 
 	source := rq.URL.Query().Get(api.QpSource)
@@ -1627,6 +1661,7 @@ func (m *Manager) runAdminAPI() {
 		rt.HandleFunc(api.AdmAPIEndpointConfigPath, m.admAPIEndpointConfig).Methods("GET", "POST", "DELETE")
 		rt.HandleFunc(api.AdmAPIEndpointCommandPath, m.admAPIEndpointCommand).Methods("GET", "POST")
 		rt.HandleFunc(api.AdmAPIEndpointCommandFieldPath, m.admAPIEndpointCommandField).Methods("GET")
+		rt.HandleFunc(api.AdmAPIEndpointCommandsHelp, m.admAPIEndpointCommandsHelp).Methods("GET")
 		rt.HandleFunc(api.AdmAPIEndpointsReportsPath, m.admAPIEndpointsReports).Methods("GET")
 		rt.HandleFunc(api.AdmAPIEndpointReportPath, m.admAPIEndpointReport).Methods("GET", "DELETE")
 		rt.HandleFunc(api.AdmAPIEndpointReportArchivePath, m.admAPIEndpointReportArchive).Methods("GET")

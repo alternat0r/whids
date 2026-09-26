@@ -5217,6 +5217,34 @@ var OpenAPIDefinition = `
         }
       }
     },
+    "/endpoints/commands/help": {
+      "get": {
+        "tags": [
+          "EDR commands"
+        ],
+        "summary": "Get the list of the builtin EDR commands available on endpoints",
+        "responses": {
+          "200": {
+            "description": "HTTP 200 response",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "name": "contain",
+                      "description": "Isolate host at network level",
+                      "help": "contain"
+                    }
+                  ],
+                  "error": "",
+                  "message": "OK"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/users": {
       "get": {
         "tags": [

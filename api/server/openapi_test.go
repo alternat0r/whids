@@ -1044,6 +1044,25 @@ func TestOpenApiStatistics(t *testing.T) {
 	runAdminApiTest(t, f)
 }
 
+func TestOpenApiEndpointCommandsHelp(t *testing.T) {
+	f := func(t *testing.T) {
+
+		path := openapi.PathItem{
+			Summary: "EDR commands",
+			Value:   api.AdmAPIEndpointCommandsHelp,
+		}
+
+		openAPI.Do(path, openapi.Operation{
+			Method:  "GET",
+			Summary: "Get the list of the builtin EDR commands available on endpoints",
+			Output:  AdminAPIResponse{},
+		})
+
+	}
+
+	runAdminApiTest(t, f)
+}
+
 /*
 func TestOpenApiTemplate(t *testing.T) {
 	f := func(t *testing.T) {
