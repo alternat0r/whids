@@ -10,9 +10,13 @@
   - Admin API: removed the `Access-Control-Allow-Origin: *` header and the websocket streams now check the request origin
   - Log query parameters (`skip`, `limit`) are now validated
   - New `GET /endpoints/commands/help` endpoint serving the list of the builtin EDR commands available on endpoints
+  - The endpoint command timeout is clamped to a sane range (1s to 10m); a zero/negative value now falls back to the default instead of making the agent run the command with no timeout
 - **Agent**
   - Randomly generated identifiers (commands, drop files) and canary file contents now use a cryptographic random generator
   - Canary directories are created with restrictive permissions (0700 instead of 0777)
+  - The agent now identifies itself correctly when launched from a network share mapped as a drive letter (e.g. `Z:\whids.exe`), by resolving its executable to the canonical UNC path that Sysmon reports; this was the cause of self-event "noise"
+- **Build**
+  - `make.sh` prints a progress message before each build step
 - **Installation**
   - The installer no longer fails with "The specified service already exists" (SC error 1073) when a previous Whids service is left behind; the existing service is removed before the new one is created
 - **Documentation**

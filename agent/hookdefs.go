@@ -420,7 +420,7 @@ func hookSelfGUID(h *Agent, e *event.EdrEvent) {
 	// and we catch it up if we check image first
 	if pimage, ok := e.GetString(pathSysmonParentImage); ok {
 		if ppid, ok := e.GetInt(pathSysmonParentProcessId); ok {
-			if pimage == selfPath && ppid == int64(os.Getpid()) {
+			if selfPathMatch(pimage) && ppid == int64(os.Getpid()) {
 				if pguid, ok := e.GetString(pathSysmonParentProcessGUID); ok {
 					h.guid = pguid
 					h.logger.Infof("Found self GUID from PGUID: %s", h.guid)
@@ -432,7 +432,7 @@ func hookSelfGUID(h *Agent, e *event.EdrEvent) {
 
 	if image, ok := e.GetString(pathSysmonImage); ok {
 		if pid, ok := e.GetInt(pathSysmonProcessId); ok {
-			if image == selfPath && pid == int64(os.Getpid()) {
+			if selfPathMatch(image) && pid == int64(os.Getpid()) {
 				if guid, ok := e.GetString(pathSysmonProcessGUID); ok {
 					h.guid = guid
 					h.logger.Infof("Found self GUID: %s", h.guid)
