@@ -25,7 +25,7 @@ const (
 
 var (
 	manager   *server.Manager
-	osSignals = make(chan os.Signal)
+	osSignals = make(chan os.Signal, 1)
 
 	// Used for certificate generation
 	defaultOrg          = "WHIDS Manager"

@@ -70,7 +70,7 @@ var (
 	configFile  = filepath.Join(abs, "config.toml")
 	logFallback = filepath.Join(abs, "fallback.log")
 
-	osSignals = make(chan os.Signal)
+	osSignals = make(chan os.Signal, 1)
 
 	logger = golog.Stdout
 )
