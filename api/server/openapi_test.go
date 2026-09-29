@@ -366,6 +366,7 @@ func TestOpenApiUserManagement(t *testing.T) {
 				Parameters: []*openapi.Parameter{
 					openapi.PathParameter("uuid", guid),
 					openapi.QueryParameter(api.QpNewKey, true, "Generate a new random key for user").Skip(),
+					openapi.QueryParameter(api.QpShowKey, true, "Show user key in response (always shown when a new key is generated)").Skip(),
 				},
 				RequestBody: openapi.JsonRequestBody(
 					"Data to update user with",

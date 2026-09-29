@@ -407,23 +407,34 @@ func (a *Agent) taskUploadDumps() {
 
 					// we shrink a file into several chunks to reduce memory impact
 					for fu := shrink.Next(); fu != nil; fu = shrink.Next() {
+						// the manager would reject it forever, so there is no point in retrying
+						if verr := fu.Validate(); verr != nil {
+							a.logger.Warnf("[dump uploader] dump file cannot be accepted by manager (%s), %s will be deleted without being sent", verr, fullpath)
+							goto CleanShrinker
+						}
+
 						if err = a.forwarder.Client.PostDump(fu); err != nil {
-							a.logger.Error(err)
 							break
 						}
+					}
+
+					// read errors are only reported by the shrinker
+					if err == nil {
+						err = shrink.Err()
 					}
 
 				CleanShrinker:
 					// close shrinker otherwise we cannot remove files
 					shrink.Close()
 
-					if shrink.Err() == nil {
+					// the file is kept on failure so that it is retried at next run
+					if err == nil {
 						a.logger.Infof("[dump uploader] dump file successfully sent to manager, deleting: %s", fullpath)
 						if err := os.Remove(fullpath); err != nil {
 							a.logger.Errorf("[dump uploader] failed to remove file %s: %s", fullpath, err)
 						}
 					} else {
-						a.logger.Errorf("[dump uploader] failed to post dump file: %s", shrink.Err())
+						a.logger.Errorf("[dump uploader] failed to post dump file %s, will retry later: %s", fullpath, err)
 					}
 				} else {
 					a.logger.Errorf("[dump uploader] unexpected directory layout, cannot send dump to manager")

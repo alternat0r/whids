@@ -294,6 +294,7 @@ func (m *Manager) admAPIUser(wt http.ResponseWriter, rq *http.Request) {
 	var uuid string
 
 	newKey, _ := strconv.ParseBool(rq.URL.Query().Get(api.QpNewKey))
+	showKey, _ := strconv.ParseBool(rq.URL.Query().Get(api.QpShowKey))
 
 	if uuid, err = muxGetVar(rq, "uuuid"); err == nil {
 		if o, err := m.db.Search(&AdminAPIUser{}, "Uuid", "=", uuid).One(); err == nil {
@@ -339,7 +340,13 @@ func (m *Manager) admAPIUser(wt http.ResponseWriter, rq *http.Request) {
 					return
 				}
 			}
-			// return user anyway
+			// return user anyway, but never expose its key unless explicitly
+			// requested or freshly generated (it would be lost otherwise)
+			if !showKey && !newKey {
+				// copy so we don't mutate the cached database object
+				user = user.Copy()
+				user.Key = ""
+			}
 			wt.Write(admJSONResp(user))
 		} else if sod.IsNoObjectFound(err) {
 			wt.Write(admErr(format("unknown user for uuid: %s", uuid)))
@@ -1587,7 +1594,10 @@ func (m *Manager) wsHandleControlMessage(c *websocket.Conn) {
 }
 
 func (m *Manager) admAPIStreamEvents(w http.ResponseWriter, r *http.Request) {
-	c, err := upgrader.Upgrade(w, r, r.Header)
+	// no extra response headers: passing the request headers here would echo
+	// the admin API key back and break the upgrade for clients sending
+	// Sec-WebSocket-Extensions (e.g. browsers)
+	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		m.logAPIErrorf("failed to upgrade to websocket: %s", err)
 		return
@@ -1610,7 +1620,8 @@ func (m *Manager) admAPIStreamEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Manager) admAPIStreamDetections(w http.ResponseWriter, r *http.Request) {
-	c, err := upgrader.Upgrade(w, r, r.Header)
+	// see admAPIStreamEvents on why no response headers are passed
+	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		m.logAPIErrorf("failed to upgrade to websocket: %s", err)
 		return

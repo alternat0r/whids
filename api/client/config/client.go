@@ -62,35 +62,51 @@ func (c *Client) DialContext(ctx context.Context, network, addr string) (con net
 }
 
 func (c *Client) DialTLSContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	con, err := tls.Dial(network, addr, &tls.Config{InsecureSkipVerify: c.Unsafe})
-
-	if err != nil {
-		return con, err
+	dialer := tls.Dialer{
+		NetDialer: &net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		},
+		Config: &tls.Config{InsecureSkipVerify: c.Unsafe},
 	}
 
-	if con != nil {
-		if addr, ok := con.LocalAddr().(*net.TCPAddr); ok {
-			c.localAddr = addr.IP.String()
-		}
+	nc, err := dialer.DialContext(ctx, network, addr)
+	if err != nil {
+		return nil, err
+	}
+	con := nc.(*tls.Conn)
+
+	if addr, ok := con.LocalAddr().(*net.TCPAddr); ok {
+		c.localAddr = addr.IP.String()
 	}
 
 	if c.ServerFingerprint == "" {
-		return con, err
+		return con, nil
 	}
 
+	// Only the leaf certificate (the one the server proved possession of the
+	// private key for) must be pinned. The rest of the chain is sent by the
+	// peer and, when verification is disabled (Unsafe), is not validated, so
+	// matching any of them would let a MITM append the legit manager's
+	// (public) certificate to its own chain and pass the pinning check.
 	connstate := con.ConnectionState()
-	for _, peercert := range connstate.PeerCertificates {
-		der, err := x509.MarshalPKIXPublicKey(peercert.PublicKey)
-		hash := data.Sha256(der)
-		if err != nil {
-			return con, err
-		}
-
-		if hash == c.ServerFingerprint {
-			return con, err
-		}
+	if len(connstate.PeerCertificates) == 0 {
+		con.Close()
+		return nil, fmt.Errorf("server fingerprint not verified: no peer certificate")
 	}
-	return con, fmt.Errorf("server fingerprint not verified")
+
+	der, err := x509.MarshalPKIXPublicKey(connstate.PeerCertificates[0].PublicKey)
+	if err != nil {
+		con.Close()
+		return nil, err
+	}
+
+	if data.Sha256(der) != c.ServerFingerprint {
+		con.Close()
+		return nil, fmt.Errorf("server fingerprint not verified")
+	}
+
+	return con, nil
 }
 
 // Transport creates an approriate HTTP transport from a configuration
