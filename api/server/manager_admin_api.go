@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -278,6 +277,9 @@ func (m *Manager) admAPIUsers(wt http.ResponseWriter, rq *http.Request) {
 				wt.Write(admErr(format("failed to generate key: %s", err)))
 				return
 			}
+		} else if err = validateUserKey(user.Key); err != nil {
+			wt.Write(admErr(err))
+			return
 		}
 
 		if err = m.CreateNewAdminAPIUser(&user); err != nil {
@@ -289,6 +291,14 @@ func (m *Manager) admAPIUsers(wt http.ResponseWriter, rq *http.Request) {
 	}
 }
 
+// validateUserKey checks that a user supplied API key is strong enough
+func validateUserKey(key string) error {
+	if len(key) < api.MinKeySize {
+		return fmt.Errorf("key is too short, at least %d characters are required", api.MinKeySize)
+	}
+	return nil
+}
+
 func (m *Manager) admAPIUser(wt http.ResponseWriter, rq *http.Request) {
 	var err error
 	var uuid string
@@ -298,8 +308,9 @@ func (m *Manager) admAPIUser(wt http.ResponseWriter, rq *http.Request) {
 
 	if uuid, err = muxGetVar(rq, "uuuid"); err == nil {
 		if o, err := m.db.Search(&AdminAPIUser{}, "Uuid", "=", uuid).One(); err == nil {
-			// we sucessfully retrieved object from DB
-			user := o.(*AdminAPIUser)
+			// we sucessfully retrieved object from DB, we work on a copy
+			// not to alter the cached object if the update fails
+			user := o.(*AdminAPIUser).Copy()
 			switch rq.Method {
 			case "DELETE":
 				if err := m.db.Delete(user); err != nil {
@@ -323,6 +334,10 @@ func (m *Manager) admAPIUser(wt http.ResponseWriter, rq *http.Request) {
 				}
 
 				if new.Key != "" {
+					if err = validateUserKey(new.Key); err != nil {
+						wt.Write(admErr(err))
+						return
+					}
 					user.Key = new.Key
 				}
 
@@ -396,7 +411,7 @@ func (m *Manager) admAPIEndpoints(wt http.ResponseWriter, rq *http.Request) {
 					endpt.Key = ""
 				}
 				// score is updated at every call as it depends on all the other endpoints
-				endpt.Score = m.gene.reducer.BoundedScore(endpt.Uuid)
+				endpt.Score = m.geneReducer().BoundedScore(endpt.Uuid)
 				out = append(out, endpt)
 			}
 			wt.Write(admJSONResp(out))
@@ -486,7 +501,7 @@ func (m *Manager) admAPIEndpoint(wt http.ResponseWriter, rq *http.Request) {
 			endpt.Config = nil
 
 			// score is updated at every call as it depends on all the other endpoints
-			endpt.Score = m.gene.reducer.BoundedScore(endpt.Uuid)
+			endpt.Score = m.geneReducer().BoundedScore(endpt.Uuid)
 
 			// we return the endpoint anyway
 			if !showKey {
@@ -827,7 +842,7 @@ func (m *Manager) admAPIEndpointReport(wt http.ResponseWriter, rq *http.Request)
 	} else {
 		if endpt, ok := m.Endpoint(euuid); ok {
 			// we return the report anyway
-			rs := m.gene.reducer.ReduceCopy(endpt.Uuid)
+			rs := m.geneReducer().ReduceCopy(endpt.Uuid)
 			switch rq.Method {
 			case "GET":
 				wt.Write(admJSONResp(rs))
@@ -845,7 +860,7 @@ func (m *Manager) admAPIEndpointReport(wt http.ResponseWriter, rq *http.Request)
 					}
 
 					// we reset reducer
-					m.gene.reducer.Delete(endpt.Uuid)
+					m.geneReducer().Delete(endpt.Uuid)
 
 					wt.Write(resp.ToJSON())
 				} else {
@@ -939,7 +954,7 @@ func (m *Manager) admAPIEndpointsReports(wt http.ResponseWriter, rq *http.Reques
 		wt.Write(admErr(err))
 	} else {
 		for _, e := range endpoints {
-			out[e.Uuid] = m.gene.reducer.ReduceCopy(e.Uuid)
+			out[e.Uuid] = m.geneReducer().ReduceCopy(e.Uuid)
 		}
 		wt.Write(admJSONResp(out))
 	}
@@ -1106,27 +1121,35 @@ func (m *Manager) admAPIEndpointArtifact(wt http.ResponseWriter, rq *http.Reques
 							exists := filepath.Join(dumpDir, dfi.Name())
 							fetch := filepath.Join(dumpDir, fname)
 							if exists == fetch {
-								var r io.ReadCloser
+								var r io.Reader
 								if fd, err := os.Open(fetch); err == nil {
+									// closing the gzip reader does not close the file
+									defer fd.Close()
+
 									r = fd
 									if gunzip {
-										if r, err = gzip.NewReader(fd); err != nil {
+										gzr, err := gzip.NewReader(fd)
+										if err != nil {
 											wt.Write(admErr(format("Failed to gunzip file: %s", err)))
 											return
 										}
+										defer gzr.Close()
+										// dumps are uploaded by endpoints, bound the
+										// decompressed size (gzip bomb)
+										r = &limitedReadCloser{Reader: gzr, remaining: maxDecompressedBytes, closer: gzr}
 									}
 
-									// defer closing of the reader
-									defer r.Close()
-
-									if data, err := ioutil.ReadAll(r); err == nil {
-										// if we want the raw file
-										if raw {
-											wt.Header().Set("Content-Type", "application/octet-stream")
-											wt.Write(data)
-										} else {
-											wt.Write(admJSONResp(data))
+									// raw content is streamed, no need to hold it in memory
+									if raw {
+										wt.Header().Set("Content-Type", "application/octet-stream")
+										if _, err := io.Copy(wt, r); err != nil {
+											m.logAPIErrorf("failed to send artifact %s: %s", fetch, err)
 										}
+										return
+									}
+
+									if data, err := io.ReadAll(r); err == nil {
+										wt.Write(admJSONResp(data))
 									} else {
 										wt.Write(admErr(format("Cannot read file: %s", err)))
 									}
@@ -1334,7 +1357,7 @@ func (m *Manager) admAPIStats(wt http.ResponseWriter, rq *http.Request) {
 	} else {
 		s := stats{
 			EndpointCount: count,
-			RuleCount:     m.gene.engine.Count(),
+			RuleCount:     m.geneEngine().Count(),
 		}
 		wt.Write(admJSONResp(s))
 	}

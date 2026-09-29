@@ -42,7 +42,7 @@ const (
 )
 
 var (
-	noBracketGuidRe = regexp.MustCompile(`(?i:[a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12})`)
+	noBracketGuidRe = regexp.MustCompile(`(?i:\A[a-f0-9]{8}-([a-f0-9]{4}-){3}[a-f0-9]{12}\z)`)
 
 	// Bounds on request payload sizes to prevent unbounded memory/disk
 	// consumption on the manager. Legit traffic (dump chunks are 3MB, tool
@@ -88,20 +88,40 @@ func (m *Manager) gunzipMiddleware(next http.Handler) http.Handler {
 			}
 			// Cap the decompressed stream so a highly compressed (zip-bomb)
 			// payload cannot expand into unbounded memory.
-			r.Body = &limitedReadCloser{Reader: io.LimitReader(r.Body, maxDecompressedBytes), closer: r.Body}
+			r.Body = &limitedReadCloser{Reader: r.Body, remaining: maxDecompressedBytes, closer: r.Body}
 		}
 		next.ServeHTTP(w, r)
 	})
 }
 
+var errDecompressedTooLarge = errors.New("decompressed request body too large")
+
 // limitedReadCloser pairs a size-limited reader with the underlying close.
+// Unlike io.LimitReader it returns an error (not io.EOF) when the limit is
+// exceeded, so that handlers do not mistake a truncated body for a full one.
 type limitedReadCloser struct {
-	Reader io.Reader
-	closer io.Closer
+	Reader    io.Reader
+	remaining int64
+	closer    io.Closer
 }
 
 func (l *limitedReadCloser) Read(p []byte) (int, error) {
-	return l.Reader.Read(p)
+	if l.remaining <= 0 {
+		// probe whether there is data beyond the limit
+		var probe [1]byte
+		if n, err := l.Reader.Read(probe[:]); n > 0 {
+			return 0, errDecompressedTooLarge
+		} else {
+			return 0, err
+		}
+	}
+
+	if int64(len(p)) > l.remaining {
+		p = p[:l.remaining]
+	}
+	n, err := l.Reader.Read(p)
+	l.remaining -= int64(n)
+	return n, err
 }
 
 func (l *limitedReadCloser) Close() error {
@@ -402,25 +422,71 @@ func (m *Manager) initializeGeneFromDB() error {
 		}
 	}
 
+	rules, rulesSha256 := rulesCache(engine)
+
+	m.Lock()
+	defer m.Unlock()
+
+	// A reducer is bound to the engine it was created with (used to resolve
+	// rule criticality and ATT&CK data), so it cannot be carried over to the
+	// new engine. We archive the current reports first so that a rule update
+	// does not silently wipe every endpoint's report.
+	if m.gene.reducer != nil {
+		m.archiveReports(m.gene.reducer)
+	}
+
 	// we update gene components only if no error is met
 	m.gene.engine = engine
 	m.gene.reducer = reducer
-	m.updateRulesCache()
+	m.gene.rules = rules
+	m.gene.sha256 = rulesSha256
 
 	return nil
 
 }
 
-func (m *Manager) updateRulesCache() {
+// archiveReports saves the non empty reports held by r into the database
+func (m *Manager) archiveReports(r *reducer.Reducer) {
+	endpoints, err := m.Endpoints()
+	if err != nil {
+		m.logAPIErrorf("failed to list endpoints to archive reports: %s", err)
+		return
+	}
+
+	now := time.Now()
+	for _, endpt := range endpoints {
+		if rs := r.ReduceCopy(endpt.Uuid); rs != nil {
+			ar := api.ArchivedReport{ReducedStats: *rs, ArchivedTimestamp: now}
+			if err := m.db.InsertOrUpdate(&ar); err != nil {
+				m.logAPIErrorf("failed to archive report of endpoint UUID=%s: %s", endpt.Uuid, err)
+			}
+		}
+	}
+}
+
+// geneEngine returns the current gene engine, safe for concurrent use
+func (m *Manager) geneEngine() *engine.Engine {
+	m.RLock()
+	defer m.RUnlock()
+	return m.gene.engine
+}
+
+// geneReducer returns the current gene reducer, safe for concurrent use
+func (m *Manager) geneReducer() *reducer.Reducer {
+	m.RLock()
+	defer m.RUnlock()
+	return m.gene.reducer
+}
+
+func rulesCache(e *engine.Engine) (rules string, sum string) {
 	sha256 := sha256.New()
 	buf := new(bytes.Buffer)
-	for rr := range m.gene.engine.GetRawRule(".*") {
+	for rr := range e.GetRawRule(".*") {
 		chunk := []byte(rr + "\n")
 		buf.Write(chunk)
 		sha256.Write(chunk)
 	}
-	m.gene.rules = buf.String()
-	m.gene.sha256 = hex.EncodeToString(sha256.Sum(nil))
+	return buf.String(), hex.EncodeToString(sha256.Sum(nil))
 }
 
 // AddCommand sets a command to be executed on endpoint specified by UUID
@@ -559,7 +625,7 @@ func (m *Manager) UpdateReducer(identifier string, e *event.EdrEvent) {
 		}
 
 		if len(sigs) > 0 {
-			m.gene.reducer.Update(e.Timestamp(), identifier, sigs)
+			m.geneReducer().Update(e.Timestamp(), identifier, sigs)
 		}
 	}
 }

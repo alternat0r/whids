@@ -51,7 +51,11 @@ func NewUploadShrinker(path, guid, ehash string) (it *UploadShrinker, err error)
 	}
 
 	size := stat.Size()
-	total := int(size/UploadShrinkerBufferSize) + 1
+	// number of chunks rounded up, an empty file is sent as a single chunk
+	total := int((size + UploadShrinkerBufferSize - 1) / UploadShrinkerBufferSize)
+	if total == 0 {
+		total = 1
+	}
 
 	it = &UploadShrinker{
 		name: filepath.Base(path),

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync/atomic"
 	"time"
 
 	"github.com/0xrawsec/golang-utils/crypto/data"
@@ -24,7 +25,8 @@ type Client struct {
 	Unsafe            bool   `json:"unsafe" toml:"unsafe" comment:"Allow unsafe HTTPS connection"`
 	MaxUploadSize     int64  `json:"max-upload-size" toml:"max-upload-size" comment:"Maximum allowed upload size"`
 
-	localAddr string
+	// written by concurrent dials, read when building requests
+	localAddr atomic.Value
 }
 
 func (c *Client) HasConnectionSettings() bool {
@@ -54,7 +56,7 @@ func (c *Client) DialContext(ctx context.Context, network, addr string) (con net
 
 	if err == nil && con != nil {
 		if addr, ok := con.LocalAddr().(*net.TCPAddr); ok {
-			c.localAddr = addr.IP.String()
+			c.localAddr.Store(addr.IP.String())
 		}
 	}
 
@@ -77,7 +79,7 @@ func (c *Client) DialTLSContext(ctx context.Context, network, addr string) (net.
 	con := nc.(*tls.Conn)
 
 	if addr, ok := con.LocalAddr().(*net.TCPAddr); ok {
-		c.localAddr = addr.IP.String()
+		c.localAddr.Store(addr.IP.String())
 	}
 
 	if c.ServerFingerprint == "" {
@@ -124,5 +126,8 @@ func (c *Client) Transport() http.RoundTripper {
 }
 
 func (c *Client) LocalAddr() string {
-	return c.localAddr
+	if addr, ok := c.localAddr.Load().(string); ok {
+		return addr
+	}
+	return ""
 }

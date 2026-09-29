@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -452,7 +452,7 @@ func (o *Operation) ParseResponse(r *http.Response) (err error) {
 	o.softInit()
 	ct := r.Header.Get("Content-Type")
 
-	if data, err = ioutil.ReadAll(r.Body); err != nil {
+	if data, err = io.ReadAll(r.Body); err != nil {
 		return
 	}
 

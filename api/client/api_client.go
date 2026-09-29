@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -31,6 +30,10 @@ const (
 	UserAgent = "Whids-API-Client/1.0"
 	// Mega byte size
 	Mega = 1 << 20
+	// DefaultHTTPTimeout bounds any request made to the manager so that an
+	// unresponsive manager cannot hang the agent. It must leave enough time
+	// to post a queued logfile or a dump chunk over a slow link.
+	DefaultHTTPTimeout = 5 * time.Minute
 )
 
 var (
@@ -42,7 +45,7 @@ var (
 	ErrUnexpectedNilResponse    = errors.New("unexpected nil response")
 	ErrUnexpectedResponseStatus = errors.New("unexpected response status code")
 	ErrNoSysmonConfig           = errors.New("no sysmon config available in manager")
-	ErrNoAgentConfig            = errors.New("no sysmon config available in manager")
+	ErrNoAgentConfig            = errors.New("no agent config available in manager")
 )
 
 func init() {
@@ -84,7 +87,7 @@ func NewManagerClient(c *config.Client) (*ManagerClient, error) {
 	mc := &ManagerClient{
 		Config:     c,
 		ManagerIP:  c.ManagerIP(),
-		HTTPClient: http.Client{Transport: tpt},
+		HTTPClient: http.Client{Transport: tpt, Timeout: DefaultHTTPTimeout},
 	}
 
 	// host
@@ -151,7 +154,7 @@ func (m *ManagerClient) PrepareGzip(method, url string, body io.Reader) (*http.R
 	// Prepare gzip content
 	compBody := new(bytes.Buffer)
 	w := gzip.NewWriter(compBody)
-	b, err := ioutil.ReadAll(body)
+	b, err := io.ReadAll(body)
 	if err != nil {
 		return nil, fmt.Errorf("PostLogs failed to prepare body")
 	}
@@ -159,11 +162,14 @@ func (m *ManagerClient) PrepareGzip(method, url string, body io.Reader) (*http.R
 	w.Close()
 
 	r, err := m.Prepare(method, url, bytes.NewBuffer(compBody.Bytes()))
+	if err != nil {
+		return nil, err
+	}
 
 	// setting header
 	r.Header.Add("Content-Encoding", "gzip")
 
-	return r, err
+	return r, nil
 }
 
 // IsServerAuthEnforced returns true if server authentication is requested by the client

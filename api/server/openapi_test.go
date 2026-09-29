@@ -351,7 +351,7 @@ func TestOpenApiUserManagement(t *testing.T) {
 					AdminAPIUser{
 						Identifier:  "SecondTestAdmin",
 						Uuid:        guid,
-						Key:         "ChangeMe",
+						Key:         utils.NewKeyOrPanic(api.DefaultKeySize),
 						Description: "Second admin user",
 						Group:       "CSIRT",
 					}, true),
@@ -371,7 +371,7 @@ func TestOpenApiUserManagement(t *testing.T) {
 				RequestBody: openapi.JsonRequestBody(
 					"Data to update user with",
 					AdminAPIUser{
-						Key:         "NewWeakKey",
+						Key:         utils.NewKeyOrPanic(api.DefaultKeySize),
 						Description: "Second admin user changed",
 						Group:       "SOC",
 					}, true),

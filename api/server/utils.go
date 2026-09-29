@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -26,7 +26,7 @@ func format(format string, a ...interface{}) string {
 // read posted data and unseriablize it from JSON
 func readPostAsJSON(rq *http.Request, i interface{}) error {
 	defer rq.Body.Close()
-	b, err := ioutil.ReadAll(rq.Body)
+	b, err := io.ReadAll(rq.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read POST body: %w", err)
 	}
@@ -35,7 +35,7 @@ func readPostAsJSON(rq *http.Request, i interface{}) error {
 
 func readPostAsTOML(rq *http.Request, i interface{}) error {
 	defer rq.Body.Close()
-	b, err := ioutil.ReadAll(rq.Body)
+	b, err := io.ReadAll(rq.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read POST body: %w", err)
 	}
@@ -44,7 +44,7 @@ func readPostAsTOML(rq *http.Request, i interface{}) error {
 
 func readPostAsXML(rq *http.Request, i interface{}) error {
 	defer rq.Body.Close()
-	b, err := ioutil.ReadAll(rq.Body)
+	b, err := io.ReadAll(rq.Body)
 	if err != nil {
 		return fmt.Errorf("failed to read POST body: %w", err)
 	}

@@ -2,9 +2,11 @@ package server
 
 import (
 	"bufio"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -55,12 +57,20 @@ func (m *Manager) endpointAuthorizationMiddleware(next http.Handler) http.Handle
 			return
 		}
 
-		if endpt.Uuid != uuid || endpt.Key != key {
+		// constant time comparison not to leak key information through timing
+		if endpt.Uuid != uuid || subtle.ConstantTimeCompare([]byte(endpt.Key), []byte(key)) != 1 {
 			http.Error(wt, "Not Authorized", http.StatusForbidden)
 			// we have to return not to reach ServeHTTP
 			return
 		}
 
+		// the IP is reported by the client (its local address, useful behind
+		// NAT) so we fall back on the connection address if it is not valid
+		if net.ParseIP(ip) == nil {
+			if rip, err := IPFromRequest(rq); err == nil {
+				ip = rip.String()
+			}
+		}
 		endpt.IP = ip
 
 		switch {
@@ -338,6 +348,9 @@ func (m *Manager) eptAPICollect(wt http.ResponseWriter, rq *http.Request) {
 	etid := m.eventLogger.InitTransaction()
 	dtid := m.detectionLogger.InitTransaction()
 	s := bufio.NewScanner(rq.Body)
+	// the default 64KB max token size is too small for some events (e.g.
+	// PowerShell script blocks); the body is already bounded by middlewares
+	s.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), int(maxDecompressedBytes))
 	for s.Scan() {
 		tok := []byte(s.Text())
 		e := event.EdrEvent{}
@@ -392,6 +405,13 @@ func (m *Manager) eptAPICollect(wt http.ResponseWriter, rq *http.Request) {
 		cnt++
 	}
 
+	// a scanning error means part of the batch was not processed, we report it
+	// so that the endpoint keeps its queued logs and retries later
+	scanErr := s.Err()
+	if scanErr != nil {
+		m.logAPIErrorf("failed to read events from endpoint UUID=%s after %d events: %s", uuid, cnt, scanErr)
+	}
+
 	if endpt != nil {
 		if err := m.db.InsertOrUpdate(endpt); err != nil {
 			m.logAPIErrorf("failed to update endpoint UUID=%s: %s", endpt.Uuid, err)
@@ -407,6 +427,9 @@ func (m *Manager) eptAPICollect(wt http.ResponseWriter, rq *http.Request) {
 	}
 	m.Logger.Debugf("count Event Received: %d", cnt)
 
+	if scanErr != nil {
+		http.Error(wt, "failed to read events", http.StatusInternalServerError)
+	}
 }
 
 // eptAPICommand HTTP handler
@@ -441,7 +464,7 @@ func (m *Manager) eptAPICommand(wt http.ResponseWriter, rq *http.Request) {
 			if endpt.Command != nil {
 				if !endpt.Command.Completed {
 					defer rq.Body.Close()
-					body, err := ioutil.ReadAll(rq.Body)
+					body, err := io.ReadAll(rq.Body)
 					if err != nil {
 						m.logAPIErrorf("failed to read response body: %s", err)
 					} else {

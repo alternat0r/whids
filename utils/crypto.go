@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"net"
 	"os"
@@ -132,7 +131,7 @@ func CertFileSha256(certPath string) (fingerprint string, err error) {
 }
 
 func CertSha256(r io.Reader) (fingerprint string, err error) {
-	pemBytes, err := ioutil.ReadAll(r)
+	pemBytes, err := io.ReadAll(r)
 	if err != nil {
 		return
 	}

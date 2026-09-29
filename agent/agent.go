@@ -384,9 +384,11 @@ func (a *Agent) update(force bool) (last error) {
 
 		// updating engine if no error
 		if last == nil {
-			// we update engine only if there was no error
-			// no need to lock HIDS as newEngine is ready to use at this point
+			// we update engine only if there was no error, the event scan
+			// routine reads the engine under read lock
+			a.Lock()
 			a.Engine = newEngine
+			a.Unlock()
 		} else {
 			a.logger.Error("EDR engine not updated:", last)
 		}
@@ -732,22 +734,65 @@ func (a *Agent) updateAgentConfig() (err error) {
 	}
 
 	a.logger.Infof("received endpoint configuration update old=%s new=%s, saving it at %s", localSha256, remoteSha256, a.config.Path())
-	// overwrite current configuration
-	newConf.Save(a.config.Path())
+	oldConf := a.config
+	path := oldConf.Path()
+
+	// overwrite current configuration, we must not restart if it failed
+	if err = newConf.Save(path); err != nil {
+		return fmt.Errorf("failed to save new configuration: %w", err)
+	}
+
+	// we reload configuration from disk so that it knows its path (needed for
+	// next updates) and we are sure we run what has been saved
+	loaded, err := config.LoadAgentConfig(path)
+	if err != nil {
+		a.restoreConfig(oldConf)
+		return fmt.Errorf("failed to reload new configuration: %w", err)
+	}
+	newConf = &loaded
 
 	a.logger.Infof("stopping agent after update")
 	a.Stop()
 	a.Wait()
+	a.closeDB()
 
 	a.Initialize()
 	if err = a.Prepare(newConf); err != nil {
-		err = fmt.Errorf("failed to prepare agent with new configuration: %w", err)
+		err = fmt.Errorf("failed to prepare agent with new configuration, rolling back: %w", err)
+		a.logger.Error(err)
+
+		// we roll back to the previous configuration not to leave the agent stopped
+		a.restoreConfig(oldConf)
+		// cancel what the failed Prepare may have scheduled
+		a.cancel()
+		a.closeDB()
+		a.Initialize()
+		if perr := a.Prepare(oldConf); perr != nil {
+			return fmt.Errorf("%w, rollback failed: %s", err, perr)
+		}
+		a.Run()
 		return
 	}
 	a.logger.Infof("restarting agent after update")
 	a.Run()
 
 	return
+}
+
+// restoreConfig writes back a previous configuration to its path
+func (a *Agent) restoreConfig(c *config.Agent) {
+	if err := c.Save(c.Path()); err != nil {
+		a.logger.Errorf("failed to restore previous configuration at %s: %s", c.Path(), err)
+	}
+}
+
+// closeDB closes the local database, it is re-opened by Prepare
+func (a *Agent) closeDB() {
+	if a.db != nil {
+		if err := a.db.Close(); err != nil {
+			a.logger.Errorf("failed to close local database: %s", err)
+		}
+	}
 }
 
 func (a *Agent) cleanup() {
@@ -1031,7 +1076,8 @@ func (a *Agent) WaitWithTimeout(timeout time.Duration) {
 	var slept time.Duration
 
 	step := time.Millisecond * 25
-	stop := make(chan bool)
+	// buffered so that the goroutine can always complete, even after timeout
+	stop := make(chan bool, 1)
 
 	go func() {
 		a.Wait()

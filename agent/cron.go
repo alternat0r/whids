@@ -312,7 +312,12 @@ func (a *Agent) taskCommandRunner() {
 	tgtBurstDur := time.Second * 30
 	burstSleep := time.Millisecond * 500
 
-	for {
+	// the agent context is replaced when the agent is re-initialized (after a
+	// configuration update), so we keep the one this runner was started with
+	// in order to stop along with the agent instead of leaking a runner
+	ctx := a.ctx
+
+	for ctx.Err() == nil {
 		if cmd, err := a.forwarder.Client.FetchCommand(); err != nil && err != client.ErrNothingToDo {
 			a.logger.Error(err)
 		} else if err == nil {
@@ -335,7 +340,10 @@ func (a *Agent) taskCommandRunner() {
 			burstDur += sleep
 		}
 
-		time.Sleep(sleep)
+		select {
+		case <-ctx.Done():
+		case <-time.After(sleep):
+		}
 	}
 }
 

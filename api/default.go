@@ -9,6 +9,8 @@ const (
 	DefaultManagerLogSize = utils.Mega * 100
 	// DefaultKeySize default size for API key generation
 	DefaultKeySize = 64
+	// MinKeySize minimum size accepted for user supplied API keys
+	MinKeySize = 32
 	// EptAPIDefaultPort default port used by manager's endpoint API
 	EptAPIDefaultPort = 1519
 	// AdmAPIDefaultPort default port used by manager's admin API

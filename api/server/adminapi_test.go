@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math/rand"
 	"net/http"
 	"net/url"
@@ -70,7 +70,7 @@ func do(req *http.Request) (r AdminAPIResponse) {
 		panic(fmt.Errorf("Unexpected response status: %d", resp.StatusCode))
 	}
 	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		panic(err)
 	}
@@ -105,7 +105,7 @@ func post(url string, data []byte) (r AdminAPIResponse) {
 		panic(fmt.Errorf("Unexpected response status: %d", resp.StatusCode))
 	}
 	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		panic(err)
 	}

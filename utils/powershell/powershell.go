@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"os/exec"
 )
 
@@ -42,7 +41,7 @@ func NewShell() (p *Powershell, err error) {
 
 // execute from any kind of reader
 func (p *Powershell) execute(r io.Reader) {
-	b, _ := ioutil.ReadAll(r)
+	b, _ := io.ReadAll(r)
 	b = append(bytes.TrimRight(b, "\n"), '\n')
 	p.stdin.Write(b)
 }
